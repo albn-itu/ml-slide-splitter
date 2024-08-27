@@ -4,6 +4,7 @@ from pypdf import PdfWriter, PdfReader, PageObject
 from pdf2image import convert_from_bytes
 from io import BytesIO
 from math import floor
+import os
 
 from PIL import Image
 
@@ -170,6 +171,14 @@ def get_slides_on_page(page: PageObject, pdf_coords):
 
     return slides
 
+def get_output_path(input_path, output_path):
+    path = output_path
+
+    if os.path.isdir(output_path):
+        path = os.path.join(output_path, os.path.basename(input_path))
+
+    return path
+
 def write_pdf(output, pages):
     writer = PdfWriter()
     for page in pages:
@@ -197,6 +206,6 @@ if __name__ == '__main__':
     slides = []
     for page in pages:
         slides.extend(get_slides_on_page(page, pdf_coords))
-    write_pdf(args.output, slides)
+    write_pdf(get_output_path(args.input, args.output), slides)
 
 
