@@ -21,6 +21,10 @@ def convert_page_to_image(page: PageObject):
     images = convert_from_bytes(pdf_bytes.getvalue(), poppler_path='/usr/bin')
     return images[0]
 
+def save_image(image: Image.Image):
+    path = "./test.jpg"
+    image.save(path)
+
 def get_image_size(image: Image.Image):
     return image.size
 
@@ -30,91 +34,141 @@ def is_not_white(image, x, y):
         return True
     return False
 
-def get_slide_locations(image: Image.Image):
-    left = 0
-    right = 0
-    top_first_slide = 0
-    bottom_first_slide = 0
-    top_second_slide = 0
-    bottom_second_slide = 0
-
-    # Images start at top left corner
+def get_slide_locations(image: Image.Image, slide_format):
+    start_points = []
     image_size = get_image_size(image)
 
-    # Start from left side about 1/3 down the page
-    vert_start = image_size[1] / 3
+    if (slide_format == '2'):
+        hori_middle = floor(image_size[0] / 2)
+        vert_middle = floor(image_size[1] / 2)   
 
-    # We shouldnt need loop all the way over
-    for x in range(image_size[0]):
-        if is_not_white(image, x, vert_start):
+        one_third_down = floor(image_size[1] / 3)
+        two_third_down = one_third_down * 2
+
+        start_points.append([(hori_middle, 0),           (hori_middle, vert_middle),     (0, one_third_down),  (image_size[0]-1, one_third_down)])
+        start_points.append([(hori_middle, vert_middle), (hori_middle, image_size[1]-1), (0, two_third_down), (image_size[0]-1, two_third_down)])
+    elif (slide_format == '4sidebyside'):
+        one_fourth_of_hori = floor(image_size[0] / 4)
+        two_fourth_of_hori = one_fourth_of_hori * 2
+        thr_fourth_of_hori = one_fourth_of_hori * 3
+
+        one_sixth_of_vert = floor(image_size[1] / 6)
+        two_sixth_of_vert = one_sixth_of_vert * 2
+        thr_sixth_of_vert = one_sixth_of_vert * 3
+
+
+        start_points.append([
+            (one_fourth_of_hori, one_sixth_of_vert),
+            (one_fourth_of_hori, thr_sixth_of_vert),
+            (0, two_sixth_of_vert),
+            (two_fourth_of_hori, two_sixth_of_vert),
+        ])
+        start_points.append([
+            (thr_fourth_of_hori, one_sixth_of_vert),
+            (thr_fourth_of_hori, thr_sixth_of_vert),
+            (two_fourth_of_hori, two_sixth_of_vert),
+            (image_size[0]-1, two_sixth_of_vert),
+        ])
+
+        one_seventh_of_vert = floor(image_size[1] / 7)
+        fou_seventh_of_vert = one_seventh_of_vert * 4
+        fiv_seventh_of_vert = one_seventh_of_vert * 5
+        six_seventh_of_vert = one_seventh_of_vert * 6
+
+        start_points.append([
+            (one_fourth_of_hori, fou_seventh_of_vert),
+            (one_fourth_of_hori, six_seventh_of_vert),
+            (0, fiv_seventh_of_vert),
+            (two_fourth_of_hori, fiv_seventh_of_vert),
+        ])
+        start_points.append([
+            (thr_fourth_of_hori, fou_seventh_of_vert),
+            (thr_fourth_of_hori, six_seventh_of_vert),
+            (two_fourth_of_hori, fiv_seventh_of_vert),
+            (image_size[0]-1, fiv_seventh_of_vert),
+        ])
+    else:
+        print("Unknown format")
+        exit
+
+    slide_points = []
+    for points in start_points:
+        slide_location = get_slide_location(image, points)
+        if -1 in slide_location:
+            print(f"One of the coordinates wasn\'t found properly: {slide_location}, {points}")
+            exit
+
+        slide_points.append(slide_location)
+
+    return slide_points
+
+def get_slide_location(image: Image.Image, start_points):
+    start_top, start_bottom, start_left, start_right = start_points
+
+    top = -1
+    for y in range(start_top[1], image_size[1]):
+        if is_not_white(image, start_top[0], y):
+            top = y
+            break
+
+    bottom = -1
+    for y in range(start_bottom[1], 0, -1):
+        if is_not_white(image, start_bottom[0], y):
+            bottom = y
+            break
+
+    left = -1
+    for x in range(start_left[0], image_size[0]):
+        if is_not_white(image, x, start_left[1]):
             left = x
             break
 
-    for x in range(image_size[0]-1, 0, -1):
-        if is_not_white(image, x, vert_start):
+    right = -1
+    for x in range(start_right[0], 0, -1):
+        if is_not_white(image, x, start_right[1]):
             right = x
             break
 
-    horizontal_start = floor(image_size[0] / 2)
-    for y in range(0, image_size[0]):
-        if is_not_white(image, horizontal_start, y):
-            top_first_slide = y
-            break
+    return (top, bottom, left, right)
 
-    for y in range(image_size[1]-1, 0, -1):
-        if is_not_white(image, horizontal_start, y):
-            bottom_second_slide = y
-            break
+def convert_x_coord(size_multiplier, x):
+    return round(x * size_multiplier, 2)
 
-    vertical_start = floor(image_size[1] / 2)
-    for y in range(vertical_start, image_size[1]):
-        if is_not_white(image, horizontal_start, y):
-            top_second_slide = y
-            break
-
-    for y in range(vertical_start, 0, -1):
-        if is_not_white(image, horizontal_start, y):
-            bottom_first_slide = y
-            break
-
-    return (left, right, top_first_slide, bottom_first_slide, top_second_slide, bottom_second_slide)
+def convert_y_coord(size_multiplier, pdf_size, y):
+    return round(pdf_size[1] - y * size_multiplier, 2)
 
 def convert_coords(image_coords, image_size, pdf_size):
-    img_left = image_coords[0]
-    img_right = image_coords[1]
-    img_sl1_top = image_coords[2]
-    img_sl1_bottom = image_coords[3]
-    img_sl2_top = image_coords[4]
-    img_sl2_bottom = image_coords[5]
-
     size_multiplier_x = pdf_size[0] / image_size[0]
     size_multiplier_y = pdf_size[1] / image_size[1]
 
-    # To convert simply subtract the y value from the height of the pdf
-    pdf_left = round(img_left * size_multiplier_x, 2)
-    pdf_right = round(img_right * size_multiplier_x, 2)
-    pdf_sl1_top = round(pdf_size[1] - img_sl1_top * size_multiplier_y, 2)
-    pdf_sl1_bottom = round(pdf_size[1] - img_sl1_bottom * size_multiplier_y, 2)
-    pdf_sl2_top = round(pdf_size[1] - img_sl2_top * size_multiplier_y, 2)
-    pdf_sl2_bottom = round(pdf_size[1] - img_sl2_bottom * size_multiplier_y, 2)
+    new_coords = []
+    for coords in image_coords:
+        top, bottom, left, right = coords
 
-    return (pdf_left, pdf_right, pdf_sl1_top, pdf_sl1_bottom, pdf_sl2_top, pdf_sl2_bottom)
+        new_coords.append((
+            convert_y_coord(size_multiplier_y, pdf_size, top),
+            convert_y_coord(size_multiplier_y, pdf_size, bottom),
+            convert_x_coord(size_multiplier_x, left),
+            convert_x_coord(size_multiplier_x, right)
+        ))
+
+    return new_coords
 
 def get_slides_on_page(page: PageObject, pdf_coords):
-    # FIXME: This is horribly slow, try with a different copying method
-    slide1 = copy.deepcopy(page)
-    slide2 = page
+    slides = []
+    for i in range(0, len(pdf_coords)-1):
+        # FIXME: This is horribly slow, try with a different copying method
+        slides.append(copy.deepcopy(page))
+    slides.append(page)
 
-    left = pdf_coords[0]
-    right = pdf_coords[1]
+    for i in range(0, len(pdf_coords)):
+        slide = slides[i]
+        top, bottom, left, right = pdf_coords[i]
 
-    slide1.mediabox.upper_right = (right, pdf_coords[2])
-    slide1.mediabox.lower_left = (left, pdf_coords[3])
+        slide.mediabox.upper_right = (right, top)
+        slide.mediabox.lower_left = (left, bottom)
 
-    slide2.mediabox.upper_right = (right, pdf_coords[4])
-    slide2.mediabox.lower_left = (left, pdf_coords[5])
-
-    return [slide1, slide2]
+    return slides
 
 def write_pdf(output, pages):
     writer = PdfWriter()
@@ -127,16 +181,18 @@ if __name__ == '__main__':
 
     parser.add_argument('input', type=str, help='Input PDF file')
     parser.add_argument('output', type=str, help='Output PDF file')
+    parser.add_argument('--format', choices=['2', '4sidebyside'])
 
     args = parser.parse_args()
 
     pages = read_pdf(args.input)
 
     image = convert_page_to_image(pages[0])
+    save_image(image)
     image_size = get_image_size(image)
-    img_sl_loc = get_slide_locations(image)
+    image_slide_locations = get_slide_locations(image, args.format)
 
-    pdf_coords = convert_coords(img_sl_loc, image_size, pages[0].mediabox.upper_right)
+    pdf_coords = convert_coords(image_slide_locations, image_size, pages[0].mediabox.upper_right)
 
     slides = []
     for page in pages:
